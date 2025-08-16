@@ -223,7 +223,7 @@ sonar {
 
 // task.check includes jacocoTestReport
 // tasks.sonar { dependsOn("jacocoTestReport") }
-tasks.sonar { dependsOn("check") }
+// tasks.sonar { dependsOn("check") }
 
 // ----------------------------------------------------------------------------
 // --------------- >>> org.springframework.boot Plugin <<< --------------------
