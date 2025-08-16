@@ -43,8 +43,7 @@ plugins {
 // --------------- >>> constants <<< ------------------------------------------
 // constant being used in this build script.
 //  gradle.properties:
-val ARTIFACT = providers.gradleProperty("artifact").get() as String
-val MAIN_CLASS = providers.gradleProperty("mainClass").get() as String
+val MAIN_CLASS = project.findProperty("mainClass") as String
 val SONAR_KEY = project.findProperty("sonar.projectKey") as String
 val SONAR_ORG = project.findProperty("sonar.organization") as String
 val SONAR_URL = project.findProperty("sonar.host.url") as String
