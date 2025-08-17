@@ -24,6 +24,8 @@ plugins {
   id("idea")
   id("jacoco")
   id("java")
+  id("java-library")
+  id("maven-publish")
   id("version-catalog")
   // net.researchgate.release
   alias(libs.plugins.release)
@@ -42,7 +44,7 @@ plugins {
 // --------------- >>> constants <<< ------------------------------------------
 // constant being used in this build script.
 //  gradle.properties:
-val MAIN_CLASS = project.findProperty("mainClass") as String
+// val MAIN_CLASS = project.findProperty("mainClass") as String
 val SONAR_KEY = project.findProperty("sonar.projectKey") as String
 val SONAR_ORG = project.findProperty("sonar.organization") as String
 val SONAR_URL = project.findProperty("sonar.host.url") as String
@@ -58,6 +60,10 @@ repositories {
 
 dependencies {
   // ########## compileOnly ##################################################
+  compileOnly("org.projectlombok:lombok")
+
+  // ########## developmentOnly ##############################################
+  developmentOnly("org.springframework.boot:spring-boot-devtools")
 
   // ########## implementation ###############################################
   // spring boot starter dependencies
@@ -66,8 +72,8 @@ dependencies {
   implementation("org.springframework.boot:spring-boot-starter-web")
   // TODO Add more Spring Boot starters as needed
 
-  // ########## developmentOnly ##############################################
-  developmentOnly("org.springframework.boot:spring-boot-devtools")
+  // other third-party libs
+  implementation("org.apache.commons:commons-lang3")
 
   // ########## runtimeOnly ##################################################
   // TODO Add runtime dependencies as needed
@@ -139,17 +145,15 @@ java {
 tasks.jar {
   manifest {
     attributes(
-            mapOf(
-                    "Specification-Title" to project.properties["title"],
-                    "Implementation-Title" to project.properties["artifact"],
-                    "Implementation-Version" to project.properties["version"],
-                    "Implementation-Vendor" to project.properties["developerName"],
-                    "Built-By" to project.properties["developerId"],
-                    "Build-Jdk" to System.getProperty("java.home"),
-                    "Created-By" to
-                            "${System.getProperty("java.version")} (${System.getProperty("java.vendor")})"
-            )
-    )
+        mapOf(
+            "Specification-Title" to project.properties["title"],
+            "Implementation-Title" to project.properties["artifact"],
+            "Implementation-Version" to project.properties["version"],
+            "Implementation-Vendor" to project.properties["developerName"],
+            "Built-By" to project.properties["developerId"],
+            "Build-Jdk" to System.getProperty("java.home"),
+            "Created-By" to
+                "${System.getProperty("java.version")} (${System.getProperty("java.vendor")})"))
   }
 }
 
@@ -174,6 +178,71 @@ tasks.test {
   jvmArgs("-XX:+EnableDynamicAgentLoading")
   // report is always generated after tests run
   finalizedBy(tasks.jacocoTestReport)
+}
+
+// ----------------------------------------------------------------------------
+// --------------- >>> Gradle Maven Publish Plugin <<< ------------------------
+// NOTE: This section is dedicated to configuring the maven-publich plugin.
+// ----------------------------------------------------------------------------
+// https://docs.gradle.org/current/userguide/publishing_maven.html
+
+publishing {
+  publications {
+    // gradle.properties properties
+    val developerEmail: String by project
+    val developerId: String by project
+    val developerName: String by project
+    val license: String by project
+    val licenseUrl: String by project
+    val scmConnection: String by project
+    val scmUrl: String by project
+    val title: String by project
+
+    create<MavenPublication>("maven") {
+      from(components["java"])
+
+      pom {
+        name = title
+        inceptionYear = "2025"
+        packaging = "jar"
+
+        licenses {
+          license {
+            name = license
+            url = licenseUrl
+          }
+        }
+
+        developers {
+          developer {
+            id = developerId
+            name = developerName
+            email = developerEmail
+          }
+        }
+
+        scm {
+          connection = scmConnection
+          developerConnection = scmConnection
+          url = scmUrl
+        }
+      }
+    }
+  }
+
+  repositories {
+    val repsyUrl: String by project
+    val repsyUsername: String by project
+    val repsyPassword: String by project
+
+    maven {
+      url = uri(repsyUrl)
+      credentials {
+        username = repsyUsername
+        password = repsyPassword
+      }
+    }
+  }
 }
 
 // ----------------------------------------------------------------------------
@@ -232,13 +301,13 @@ sonar {
 // ----------------------------------------------------------------------------
 // https://docs.spring.io/spring-boot/gradle-plugin/index.html
 
-springBoot { mainClass.set("$MAIN_CLASS") }
+springBoot { mainClass.set("") }
 
 tasks.bootJar {
   // layered.enabled.set(false)
   layered.enabled.set(true)
   dependsOn("check")
-  manifest { attributes("Start-Class" to "$MAIN_CLASS") }
+  manifest { attributes("Start-Class" to "") }
 }
 
 // ----------------------------------------------------------------------------
@@ -246,8 +315,10 @@ tasks.bootJar {
 // ----------------------------------------------------------------------------
 
 tasks.register("addCopyright") {
+  group = "build"
+  description = "Adds copyright to all Java files in the src directory."
   val copyright =
-          """
+      """
 /*
  * Copyright 2025 Rubens Gomes
  *
@@ -263,18 +334,22 @@ tasks.register("addCopyright") {
  * See the License for the specific language governing permissions and
  * limitations under the__LICENSE] [1].
  */        
-    """.trimIndent()
+    """
+          .trimIndent()
 
   val srcDir = file("src")
 
   doLast {
-    srcDir.walkTopDown().filter { it.isFile && it.extension == "java" }.forEach { file ->
-      val lines = file.readLines()
-      if (lines.isNotEmpty() && lines[0].contains("Copyright")) {
-        return@forEach
-      }
-      file.writeText(copyright + "\n" + file.readText())
-      println("Added copyright to: ${file.path}")
-    }
+    srcDir
+        .walkTopDown()
+        .filter { it.isFile && it.extension == "java" }
+        .forEach { file ->
+          val lines = file.readLines()
+          if (lines.isNotEmpty() && lines[0].contains("Copyright")) {
+            return@forEach
+          }
+          file.writeText(copyright + "\n" + file.readText())
+          println("Added copyright to: ${file.path}")
+        }
   }
 }
