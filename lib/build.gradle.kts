@@ -163,6 +163,7 @@ java {
 }
 
 tasks.jar {
+  dependsOn("sonar")
   manifest {
     attributes(
         mapOf(
@@ -359,6 +360,12 @@ sonar {
     property("sonar.projectKey", sonarKey)
     property("sonar.organization", sonarOrg)
     property("sonar.host.url", sonarUrl)
+    property("sonar.sources", "src/main/java")
+    property("sonar.tests", "src/test/java")
+    property("sonar.exclusions", "**/generated/**")
+    property("sonar.java.source", "21")
+    property(
+        "sonar.coverage.jacoco.xmlReportPaths", "build/reports/jacoco/test/jacocoTestReport.xml")
   }
 }
 
