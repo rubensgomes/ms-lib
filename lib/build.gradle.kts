@@ -41,13 +41,36 @@ plugins {
   alias(libs.plugins.task.tree)
 }
 
-// --------------- >>> constants <<< ------------------------------------------
-// constant being used in this build script.
-//  gradle.properties:
-// val MAIN_CLASS = project.findProperty("mainClass") as String
-val SONAR_KEY = project.findProperty("sonar.projectKey") as String
-val SONAR_ORG = project.findProperty("sonar.organization") as String
-val SONAR_URL = project.findProperty("sonar.host.url") as String
+// --------------- >>> gradle properties <<< ----------------------------------
+// required in configuration of: publishing publications
+val artifact: String by project
+val title: String by project
+// required in configuration of: publishing publications license
+val license: String by project
+val licenseUrl: String by project
+// required in configuration of: publishing publications developer
+val developerEmail: String by project
+val developerId: String by project
+val developerName: String by project
+// required in configuration of: publishing publications scm
+val scmConnection: String by project
+val scmUrl: String by project
+// required in configuration of: publishing repositories maven
+val repsyUrl: String by project
+// required in configuration of: publishing repositories credentials
+// REPSY_USERNAME must be defined as an environment variable
+// REPSY_PASSWORD must be defined as an environment variable
+val repsyUsername: String? = System.getenv("REPSY_USERNAME")
+val repsyPassword: String? = System.getenv("REPSY_PASSWORD")
+// required in configuration of: sonar properties
+// SONAR_TOKEN must be defined as an environment variable
+val sonarKey = project.findProperty("sonar.projectKey") as String
+val sonarOrg = project.findProperty("sonar.organization") as String
+val sonarUrl = project.findProperty("sonar.host.url") as String
+
+project.group = project.findProperty("group") as String
+
+project.description = project.findProperty("description") as String
 
 // --------------- >>> repositories <<< ---------------------------------------
 
@@ -57,7 +80,6 @@ repositories {
 }
 
 // --------------- >>> dependencies <<< ---------------------------------------
-
 dependencies {
   // ########## compileOnly ##################################################
   compileOnly("org.projectlombok:lombok")
@@ -67,13 +89,12 @@ dependencies {
 
   // ########## implementation ###############################################
   // spring boot starter dependencies
-  implementation("org.springframework.boot:spring-boot-starter-actuator")
-  implementation("org.springframework.boot:spring-boot-starter-validation")
-  implementation("org.springframework.boot:spring-boot-starter-web")
+  api("org.springframework.boot:spring-boot-starter-validation")
+  api("org.springframework.boot:spring-boot-starter-web")
   // TODO Add more Spring Boot starters as needed
 
   // other third-party libs
-  implementation("org.apache.commons:commons-lang3")
+  api("org.apache.commons:commons-lang3")
 
   // ########## runtimeOnly ##################################################
   // TODO Add runtime dependencies as needed
@@ -118,9 +139,6 @@ idea {
 tasks.jacocoTestReport {
   // tests are required to run before generating the report
   dependsOn(tasks.test)
-}
-
-tasks.jacocoTestReport {
   reports {
     xml.required = true
     csv.required = false
@@ -134,6 +152,8 @@ tasks.jacocoTestReport {
 // ----------------------------------------------------------------------------
 // https://docs.gradle.org/current/userguide/java_plugin.html
 java {
+  sourceCompatibility = JavaVersion.VERSION_21
+  targetCompatibility = JavaVersion.VERSION_21
   withSourcesJar()
   withJavadocJar()
   toolchain {
@@ -162,8 +182,6 @@ tasks.compileJava {
   dependsOn("spotlessApply")
 }
 
-tasks.named<Test>("test") { useJUnitPlatform() }
-
 // ----------------------------------------------------------------------------
 // --------------- >>> Gradle JVM Test Suite Plugin <<< -----------------------
 // NOTE: This section is dedicated to configuring the JVM Test Suite plugin.
@@ -188,17 +206,16 @@ tasks.test {
 
 publishing {
   publications {
-    // gradle.properties properties
-    val developerEmail: String by project
-    val developerId: String by project
-    val developerName: String by project
-    val license: String by project
-    val licenseUrl: String by project
-    val scmConnection: String by project
-    val scmUrl: String by project
-    val title: String by project
+    create<MavenPublication>("mavenJava") {
+      versionMapping {
+        usage("java-api") { fromResolutionOf("runtimeClasspath") }
+        usage("java-runtime") { fromResolutionResult() }
+      }
 
-    create<MavenPublication>("maven") {
+      groupId = project.group.toString()
+      artifactId = artifact
+      version = project.version.toString()
+
       from(components["java"])
 
       pom {
@@ -231,10 +248,6 @@ publishing {
   }
 
   repositories {
-    val repsyUrl: String by project
-    val repsyUsername: String by project
-    val repsyPassword: String by project
-
     maven {
       url = uri(repsyUrl)
       credentials {
@@ -254,11 +267,55 @@ publishing {
 spotless {
   java {
     target("src/**/*.java")
-    googleJavaFormat("1.17.0")
+
+    // Use Google Java Format
+    googleJavaFormat()
+
+    // Remove unused imports
+    removeUnusedImports()
+
+    licenseHeader(
+        """
+            /*
+             * Copyright 2025 Rubens Gomes
+             *
+             * Licensed under the Apache License, Version 2.0 (the "License");
+             * you may not use this file except in compliance with the License.
+             * You may obtain a copy of the License at
+             *
+             *     http://www.apache.org/licenses/LICENSE-2.0
+             *
+             * Unless required by applicable law or agreed to in writing, software
+             * distributed under the License is distributed on an "AS IS" BASIS,
+             * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+             * See the License for the specific language governing permissions and
+             * limitations under the License.
+             */
+        """
+            .trimIndent())
+
+    // Custom import order
+    importOrder("java", "javax", "org", "com", "")
+
+    // Trim trailing whitespace
+    trimTrailingWhitespace()
+
+    // End with newline
+    endWithNewline()
   }
 
+  // Format Kotlin files (if you add any)
+  kotlin {
+    ktfmt()
+    trimTrailingWhitespace()
+    endWithNewline()
+  }
+
+  // Format Gradle Kotlin DSL build file
   kotlinGradle {
     target("*.gradle.kts")
+    trimTrailingWhitespace()
+    endWithNewline()
     ktfmt()
   }
 }
@@ -270,10 +327,24 @@ spotless {
 // https://github.com/researchgate/gradle-release
 
 release {
-  with(git) {
-    pushReleaseVersionBranch.set("release")
+  // Git configuration
+  git {
     requireBranch.set("main")
+    pushToRemote.set("origin")
+    pushToBranchPrefix.set("")
   }
+
+  // Version management
+  versionPropertyFile.set("gradle.properties")
+  tagTemplate.set("v${version}")
+
+  // Pre-release tasks
+  preTagCommitMessage.set("Pre-tag commit: ")
+  tagCommitMessage.set("Creating tag: ")
+  newVersionCommitMessage.set("New version: ")
+
+  // Fail on updateNeeded
+  failOnUpdateNeeded.set(true)
 }
 
 // ----------------------------------------------------------------------------
@@ -285,14 +356,15 @@ release {
 sonar {
   properties {
     // SONAR_TOKEN must be defined as an environment variable
-    property("sonar.projectKey", SONAR_KEY)
-    property("sonar.organization", SONAR_ORG)
-    property("sonar.host.url", SONAR_URL)
+    property("sonar.projectKey", sonarKey)
+    property("sonar.organization", sonarOrg)
+    property("sonar.host.url", sonarUrl)
   }
 }
 
 // task.check includes jacocoTestReport
-// tasks.sonar { dependsOn("jacocoTestReport") }
+tasks.sonar { dependsOn("jacocoTestReport") }
+
 // tasks.sonar { dependsOn("check") }
 
 // ----------------------------------------------------------------------------
@@ -301,55 +373,32 @@ sonar {
 // ----------------------------------------------------------------------------
 // https://docs.spring.io/spring-boot/gradle-plugin/index.html
 
-springBoot { mainClass.set("") }
-
-tasks.bootJar {
-  // layered.enabled.set(false)
-  layered.enabled.set(true)
-  dependsOn("check")
-  manifest { attributes("Start-Class" to "") }
-}
+// Disable the bootJar task since this is a library
+tasks.bootJar { enabled = false }
 
 // ----------------------------------------------------------------------------
-// --------------- >>> Add Copyright Task <<< ---------------------------------
+// --------------- >>> Print Config Vars Task <<< -----------------------------
 // ----------------------------------------------------------------------------
-
-tasks.register("addCopyright") {
+tasks.register("printConfigVars") {
   group = "build"
-  description = "Adds copyright to all Java files in the src directory."
-  val copyright =
-      """
-/*
- * Copyright 2025 Rubens Gomes
- *
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
- *
- *     http://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the__LICENSE] [1].
- */        
-    """
-          .trimIndent()
-
-  val srcDir = file("src")
+  description = "Prints variables configured in the project."
 
   doLast {
-    srcDir
-        .walkTopDown()
-        .filter { it.isFile && it.extension == "java" }
-        .forEach { file ->
-          val lines = file.readLines()
-          if (lines.isNotEmpty() && lines[0].contains("Copyright")) {
-            return@forEach
-          }
-          file.writeText(copyright + "\n" + file.readText())
-          println("Added copyright to: ${file.path}")
-        }
+    println("artifactId: $artifact")
+    println("title: $title")
+    println("version: $version")
+    println("group: $project.group")
+    // description is derived from project.description
+    println("description: $description")
+    println("license: $license")
+    println("licenseUrl: $licenseUrl")
+    println("developerEmail: $developerEmail")
+    println("developerId: $developerId")
+    println("developerName: $developerName")
+    println("scmConnection: $scmConnection")
+    println("scmUrl: $scmUrl")
+    println("repsyUrl: $repsyUrl")
+    println("repsyUsername: $repsyUsername")
+    println("repsyPassword: $repsyPassword")
   }
 }

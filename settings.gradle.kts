@@ -31,6 +31,13 @@ plugins {
     id("org.gradle.toolchains.foojay-resolver-convention") version "1.0.0"
 }
 
+// We must use environment variables for security reasons, and to allow
+// the credentials to be passed to docker containers running from pipelines.
+// REPSY_USERNAME must be defined as an environment variable
+// REPSY_PASSWORD must be defined as an environment variable
+val repsyUsername = System.getenv("REPSY_USERNAME")
+val repsyPassword = System.getenv("REPSY_PASSWORD")
+
 dependencyResolutionManagement {
     repositories {
         maven {
@@ -38,6 +45,11 @@ dependencyResolutionManagement {
             // NOTE: You should replace with your own Maven repository. Rubens may
             // deactivate this repository at anytime without notice.
             url = uri("https://repo.repsy.io/mvn/rubensgomes/default/")
+
+            credentials {
+                username = repsyUsername
+                password = repsyPassword
+            }
         }
     }
 
